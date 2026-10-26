@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { adaptiveThresholds, classify, median, riskScore, timeToCritical, trendLabel, weatherScore, BASE_THRESHOLDS } from "./riskEngine";
+import { adaptiveThresholds, classify, median, riskScore, timeToCritical, trendLabel, weatherScore } from "./riskEngine";
+import { BASE_THRESHOLDS } from "./config";
 
 describe("riskEngine", () => {
   it("median takes index floor(n/2) of sorted", () => expect(median([5, 1, 90, 3, 4])).toBe(4));

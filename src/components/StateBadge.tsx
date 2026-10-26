@@ -10,7 +10,7 @@ const STYLES: Record<string, string> = {
 
 export function StateBadge({ state, className }: { state: string; className?: string }) {
   return (
-    <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold", STYLES[state] ?? STYLES.NORMAL, className)}>
+    <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold", STYLES[state] ?? STYLES["NORMAL"], className)}>
       {state}
     </span>
   );

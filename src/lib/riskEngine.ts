@@ -68,7 +68,7 @@ export interface EngineOutput {
 
 export function median(values: number[]): number {
   const s = [...values].sort((a, b) => a - b);
-  return s[Math.floor(s.length / 2)];
+  return s[Math.floor(s.length / 2)] ?? 0;
 }
 
 export function trendLabel(rate: number): string {
