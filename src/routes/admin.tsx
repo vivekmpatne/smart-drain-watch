@@ -60,7 +60,7 @@ function AdminDebug() {
               <span>Net inflow</span>
               <span className="font-semibold">{s.netInflow > 0 ? "+" : ""}{s.netInflow} %/min</span>
             </div>
-            <Slider min={NET_INFLOW_MIN} max={NET_INFLOW_MAX} step={1} value={[s.netInflow]} onValueChange={([v]) => s.set({ netInflow: v })} />
+            <Slider min={NET_INFLOW_MIN} max={NET_INFLOW_MAX} step={1} value={[s.netInflow]} onValueChange={([v]) => s.set({ netInflow: v ?? 0 })} />
           </div>
           <div className="flex items-center gap-2 text-sm">
             Speed
