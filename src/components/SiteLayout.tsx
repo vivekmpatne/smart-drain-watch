@@ -79,6 +79,7 @@ export function SiteLayout({ children }: { children: ReactNode }) {
             <a href={LINKS.github} target="_blank" rel="noreferrer" className="hover:text-foreground">GitHub repo</a>
             <a href={LINKS.demoVideos} target="_blank" rel="noreferrer" className="hover:text-foreground">Demo videos</a>
             <a href={LINKS.poster} target="_blank" rel="noreferrer" className="hover:text-foreground">Poster</a>
+            <a href={LINKS.presentation} target="_blank" rel="noreferrer" className="hover:text-foreground">Capstone PPT</a>
           </div>
         </div>
       </footer>

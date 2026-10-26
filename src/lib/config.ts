@@ -29,9 +29,10 @@ export const SENSOR_NOISE = 0.4;
 export const OUTLIER_CHANCE = 0.05;
 export const HISTORY_MAX = 120;
 
-// Placeholder links — replace with real URLs.
+// Public project resources.
 export const LINKS = {
-  github: "https://github.com/your-org/smart-drain",
-  demoVideos: "https://example.com/smart-drain/demo-videos",
-  poster: "https://example.com/smart-drain/poster.pdf",
+  github: "https://github.com/vivekmpatne/smart-drain-flood-warning-system",
+  demoVideos: "https://drive.google.com/drive/folders/1869mVIRYLwwES12wQjYP1Cnl_X0ko-AE",
+  poster: "https://github.com/vivekmpatne/smart-drain-flood-warning-system/blob/main/docs/poster.jpeg",
+  presentation: "https://github.com/vivekmpatne/smart-drain-flood-warning-system/blob/main/docs/ppt_doc.pdf",
 };

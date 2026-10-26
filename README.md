@@ -1,112 +1,194 @@
 # Smart Drain Watch
 
-Build a React + TypeScript + Vite + Tailwind CSS + shadcn/ui web app called "Smart Drain". It is a browser-based interactive SIMULATION of a real IoT flood early-warning prototype (ESP32 sensor node + MQTT + Node-RED risk engine) for urban drains in Bengaluru. Use React Router, Recharts and Zustand. No backend, no Supabase, no authentication. Everything runs client-side.
+![React 19](https://img.shields.io/badge/React-19-149eca?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178c6?logo=typescript&logoColor=white)
+![TanStack Start](https://img.shields.io/badge/TanStack-Start-ff4154)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06b6d4?logo=tailwindcss&logoColor=white)
+![Vitest](https://img.shields.io/badge/tests-16%20passing-6e9f18?logo=vitest&logoColor=white)
+![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+![SIC Capstone](https://img.shields.io/badge/Samsung_Innovation_Campus-IoT_Capstone-1428a0)
 
-FRAMING RULES
-- This is a simulation of real hardware. Never present simulated values as real sensor readings. Show a small persistent "Simulation" badge in the header.
-- Do not invent statistics, news items, quotes or testimonials anywhere in the app. Use clearly marked placeholders where real content will be added later.
+An interactive browser digital twin for a Bengaluru urban-drain flood early-warning capstone. Explore sensor noise filtering, weather-aware risk thresholds, a four-state risk engine, node health and simulated actuator response.
 
-DESIGN SYSTEM (light theme only, matching attached screenshots)
-- Page background #FAF7F5, cards white, 20px radius, very subtle border rgba(0,0,0,0.05), soft shadow 0 4px 24px rgba(20,20,20,0.06).
-- Text charcoal #2B2A28, secondary #6B6A68. Font: Inter.
-- State colors: NORMAL green #2FAE7B, WATCH blue #3B9FE0, ALERT amber #F0A93B (text #B5761F), CRITICAL red #E85D4E (text #C43F2E), ESCALATED coral with a 1px coral border.
-- Primary accent coral #E85D4E. Water-related accents blue.
-- State badges are small pills: tinted background (14% opacity of the state color), colored text, 12px bold, fully rounded.
-- Clean, premium SaaS look, bento-style grid, generous whitespace. No dark mode, no heavy gradients, no neon.
+> **Simulation notice:** This repository's web app runs a local simulation. It does not connect to physical ESP32 hardware, a live EMQX broker, Node-RED, Open-Meteo, BBMP or emergency services. The hardware design below is a proposed reference wiring plan, not a verified as-built schematic.
 
-ROUTES
-/ (landing), /admin (control room), /citizen (citizen portal), /architecture, /about.
-Shared layout: header with logo "Smart Drain", nav links, a role switcher ("Control Room" / "Citizen") that navigates between /admin and /citizen, and the Simulation badge. Footer with links: GitHub repo, demo videos, poster (use placeholder URLs in one config file). Make it responsive for desktop, tablet and mobile. Create simple placeholder content for each page for now.
+## At a glance
 
-FILES TO CREATE
-- src/lib/config.ts: every tunable constant (below).
-- src/lib/riskEngine.ts: PURE TypeScript functions, no React imports.
-- src/store/simulationStore.ts: Zustand store.
-- src/hooks/useSimulationLoop.ts: the tick loop.
+- **Capstone:** Smart Drain Flood Early-Warning System
+- **Credits:** Samsung Innovation Campus · Team 10 · RNSIT, Bengaluru
+- **Web stack:** React 19, TypeScript, TanStack Start/Router, Tailwind CSS, Recharts, Zustand
+- **Proposed edge stack:** Dual ESP32, FreeRTOS, EMQX MQTT, Node-RED, Open-Meteo forecast context
+- **Risk engine:** Pure TypeScript functions in `src/lib/riskEngine.ts`; tunable constants in `src/lib/config.ts`
+- **Tests:** 16 current automated tests across engine logic, route UI and interactions
 
-CONFIG CONSTANTS (src/lib/config.ts)
-SAMPLE_INTERVAL_SIM_SECONDS = 3
-MEDIAN_WINDOW = 5
-EMA_ALPHA = 0.3
-MIN_RATE_GAP_SECONDS = 1
-SENSOR_STALE_AFTER_SECONDS = 15
-WEATHER_STALE_AFTER_MINUTES = 20
-WEATHER_REFRESH_MINUTES = 15
-ESCALATION_SECONDS = 60
-EVENT_LOG_MAX = 20
-FLOAT_FORCES_CRITICAL = true (float switch trips when true water level >= 95)
-BASE_THRESHOLDS = level watch 40, alert 60, critical 80; rate alert 3, rate critical 5 (percent per minute)
-SPEED_OPTIONS = 1, 3, 10, 30 (default 3)
+## System architecture
 
-SIMULATION CLOCK
-Keep a simulated clock. Each tick advances simulated time by SAMPLE_INTERVAL_SIM_SECONDS. The real tick interval in milliseconds is 3000 / speed. All rate calculations, the sensor staleness check and the 60-second escalation timer use simulated time, not wall-clock time. The weather staleness check uses wall-clock time.
+```text
+PROPOSED FIELD SYSTEM
+┌────────────────────────┐    MQTT QoS 1     ┌────────────────────────────┐
+│ ESP32 Sensor Node      │ ────────────────► │ EMQX Broker                │
+│ ultrasonic + rain      │                    └──────────────┬─────────────┘
+│ FreeRTOS sample queue  │                                   │
+└────────────────────────┘                                   ▼
+                                               ┌────────────────────────────┐
+                                               │ Node-RED Flow 3            │
+                                               │ validate → median → EMA   │
+                                               │ → rate → weather → FSM    │
+                                               └──────────────┬─────────────┘
+                                                              │ MQTT command
+                                                              ▼
+                                               ┌────────────────────────────┐
+                                               │ ESP32 Actuator Node        │
+                                               │ RGB + buzzer + float switch│
+                                               └────────────────────────────┘
 
-VIRTUAL DRAIN
-- trueLevel (0-100 percent). A "net inflow" control in percent per minute (range -40 to +40). Each tick: trueLevel += netInflow * (SAMPLE_INTERVAL_SIM_SECONDS / 60), clamped to 0-100.
-- Sensor reading = trueLevel + small random noise (+/-0.4), clamped to 0-100. Add a small chance of a one-sample outlier spike (to show the median filter working), toggleable.
-- Controls the user can change: net inflow, speed, sensor online/offline, actuator node online/offline, "storm weather" override, "force weather stale", "float switch" display.
+THIS REPOSITORY
+┌─────────────────────┐   ┌──────────────────────────┐
+│ Zustand simulation  │ → │ Pure TypeScript risk     │ → SCADA / Citizen UI
+│ store + global tick │   │ engine + local weather   │   Architecture / About
+└─────────────────────┘   └──────────────────────────┘
+```
 
-RISK ENGINE (riskEngine.ts), the exact logic to port from Node-RED flow:
-Per sensor sample, in this order:
-1. Median filter: push the reading into a buffer of the last MEDIAN_WINDOW readings, take the median (sort ascending, element at index floor(n/2)). Output level_median.
-2. EMA: ema = first reading ? reading : EMA_ALPHA*level_median + (1-EMA_ALPHA)*previousEma.
-3. Rate (percent per minute) = (level_median - previousLevelMedian) / (elapsedSimSeconds / 60). If elapsed < MIN_RATE_GAP_SECONDS keep the last rate. First sample rate = 0.
-4. Trend label from rate: abs(rate) < 1 -> "Stable". Positive: < 3 "Rising Slowly", < 5 "Rising", otherwise "Rising Rapidly". Negative: abs < 3 "Falling Slowly", < 5 "Falling", otherwise "Falling Rapidly".
-5. Weather freshness: weatherStale = no successful fetch yet OR (now - lastFetched) > WEATHER_STALE_AFTER_MINUTES. If stale, the weather values used for SCORING are all treated as 0 (raw values are still shown in the UI).
-6. Weather score (effective values): rainProb6h >= 80 +3, >= 60 +2, >= 40 +1. rainVolume6h >= 10 +3, >= 5 +2, >= 2 +1. rainVolume24h >= 20 +2, >= 10 +1. humidity >= 85 +1. clouds >= 90 +1.
-7. Adaptive thresholds from weatherScore:
-   score >= 6: level watch 30 / alert 50 / critical 70, rate alert 2 / critical 4
-   score >= 4: 35 / 55 / 75, rate 2.5 / 4.5
-   score >= 2: 38 / 58 / 78, rate 2.8 / 4.8
-   otherwise the base thresholds.
-8. State:
-   CRITICAL if ema >= levelCritical OR rate >= rateCritical (or the float switch has tripped and FLOAT_FORCES_CRITICAL is true)
-   else ALERT if ema >= levelAlert OR rate >= rateAlert
-   else WATCH if ema >= levelWatch OR effectiveRainProb6h >= 60
-   else NORMAL.
-   (Only positive rates trigger; a rapidly falling level does not.)
-9. Risk score 0-100: bands NORMAL 0-39, WATCH 40-59, ALERT 60-79, CRITICAL 80-100. levelPressure = min(1, ema / levelCritical). ratePressure = min(1, max(0, rate) / rateCritical). pressure = max of the two. score = round(band.min + pressure * (band.max - band.min)), then clamp inside the band of the CURRENT state. The score must never contradict the state.
-10. Explanation factors (generated from live values, never hardcoded strings):
-   "Water level: 64% (elevated)" with descriptor critical / elevated / moderate / normal by comparing to levelCritical / levelAlert / levelWatch.
-   "Rise rate: +3.5%/min (moderate)" with descriptors stable / slow / moderate / rapid (rising) or falling / falling slowly / falling rapidly.
-   "Rain forecast: 60% probability, 2.1mm (high impact)" with descriptors: >= 60 high impact, >= 40 moderate impact, >= 1 low impact, else no impact. If weather is stale add "(forecast stale, not used)".
-   Recommendation: NORMAL "Continue monitoring." WATCH "Monitor rainfall and water level closely." ALERT "Inspect drain and prepare response." CRITICAL "Immediate field inspection required."
-11. Time to critical: if rate > 0 and ema < 80: base = (80 - ema) / rate minutes. rainFactor = 1.35 if effective rainProb6h >= 80 or rainVolume6h >= 10; 1.20 if >= 60 or >= 5; 1.10 if >= 40 or >= 2; else 1.0. adjusted = base / rainFactor. Messages: ema >= 80 "CRITICAL: Water level already at critical level"; adjusted exists and rainFactor > 1 "Rain-adjusted critical level in approximately X minutes"; adjusted exists "Critical level in approximately X minutes"; otherwise "Water level is not currently rising".
-12. Overall output object: { levelRaw, levelMedian, levelEma, rate, trend, state, score, factors, recommendation, timeToCritical, weatherStale, weatherScore, thresholdsUsed }.
+The web twin uses one Zustand store (`src/store/simulationStore.ts`) and a single simulation loop mounted in `SiteLayout`. It generates simulated water readings and weather values, then calls the pure risk engine. The site presents simulated values with a persistent Simulation badge.
 
-ALERT / ESCALATION / EMAIL (in the store)
-- State changes are only processed when the state actually changes (change filter).
-- Entering ALERT starts an escalation timer of ESCALATION_SECONDS simulated seconds and resets ackReceived to false. Pressing Acknowledge sets ackReceived = true. If the timer fires and ackReceived is false: log an ESCALATED event, show an indicator state of "ESCALATED, treated as Critical", force the virtual red LED on. Returning to NORMAL clears the timer and resets acknowledgement. Do not restart the timer on ALERT/WATCH/CRITICAL wobble without passing through NORMAL.
-- Email: when the state changes to ALERT or CRITICAL, and on escalation, append an entry to a "simulated email outbox" (subject "Drain Alert: ALERT", body "Flood risk state changed to ALERT. Please check the Smart Drain Monitoring dashboard for live water level, weather conditions, prediction, and node status."). No real email is sent anywhere. Do not send the same state twice in a row.
-- Event log: last EVENT_LOG_MAX events {time, state or ESCALATED}, newest first.
+## Features
 
-SENSOR HEALTH
-- Sensor node status text: "ONLINE • DATA FRESH" if samples arrive; "ONLINE • DATA STALE" if no sample for SENSOR_STALE_AFTER_SECONDS simulated seconds while the node is still marked online; "OFFLINE • DATA UNAVAILABLE" if the user turns the sensor node offline.
-- System Health: "SYSTEM DEGRADED" if the sensor is offline or stale OR weather is stale, else "SYSTEM HEALTHY". This is separate from the flood risk state and must never be merged with it.
-- Actuator node: ONLINE / OFFLINE toggle; does not affect system health.
+- **Control Room (`/admin`):** live true/raw/EMA telemetry chart, risk-state banner, hardware status twin and scenario injection controls.
+- **Architecture (`/architecture`):** selectable pipeline nodes with contracts and guardrails, dual-node FreeRTOS breakdown, MQTT topic/QoS table and adaptive threshold explorer.
+- **Citizen Portal (`/citizen`):** risk-state safety guidance, drain cross-section, simulated rain outlook and a local report-dialog interaction.
+- **Landing (`/`):** shared-store micro-twin, SCADA/architecture CTAs and heavy-rain/clear-drain scenarios.
+- **About (`/about`):** capstone credits, six engineering interview defenses and deployment limitations.
 
-ACTUATOR (virtual on-site node)
-Green LED for NORMAL and WATCH, yellow for ALERT, red for CRITICAL or escalated (plus a buzzer indicator on red). Show it as a small virtual device card.
+## Project resources
 
-Wire everything so the store exposes the current pipeline output and history (last ~120 points of ema level for charts). Do NOT build the full dashboards yet, only a simple verification debug panel on /admin printing the current engine output and a net-inflow slider so I can verify the logic. Keep all engine code pure and typed.
+- [GitHub repository](https://github.com/vivekmpatne/smart-drain-flood-warning-system)
+- [Capstone poster](https://github.com/vivekmpatne/smart-drain-flood-warning-system/blob/main/docs/poster.jpeg)
+- [Capstone presentation (PDF)](https://github.com/vivekmpatne/smart-drain-flood-warning-system/blob/main/docs/ppt_doc.pdf)
+- [Demo videos (Google Drive)](https://drive.google.com/drive/folders/1869mVIRYLwwES12wQjYP1Cnl_X0ko-AE)
 
-This project was built with [Lovable](https://lovable.dev).
+## Node-RED Flow 3 pipeline
 
-## Build with Lovable
+```text
+MQTT In (smartdrain/sensor/telemetry)
+  → rolling median (configured window: 5 samples)
+  → EMA (α = 0.3)
+  → rate of rise (median delta per elapsed minute)
+  → weather fusion (discrete score; stale weather excluded)
+  → adaptive threshold selection
+  → 4-state risk evaluator (NORMAL / WATCH / ALERT / CRITICAL)
+  → actuator command + acknowledgement/escalation dispatch
+```
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/ad29cddd-c361-46fd-adf5-05e12cb4a66d).
+The diagram documents the proposed Node-RED system and the web engine's current processing concepts. The repository does not include an executable Node-RED flow export or a live broker integration.
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+### MQTT topic contracts (proposed)
 
-## Development
+| Topic                         | Publisher → subscriber | Purpose                                                 | QoS |
+| ----------------------------- | ---------------------- | ------------------------------------------------------- | --: |
+| `smartdrain/sensor/telemetry` | Sensor → flow          | Level, timestamp/sequence and sensor health             |   1 |
+| `smartdrain/actuator/command` | Flow → actuator        | Risk state and output command                           |   1 |
+| `smartdrain/system/status`    | Nodes → flow           | Availability and diagnostics; use retained LWT presence |   1 |
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+QoS 1 is at-least-once delivery, so consumers should be idempotent and account for duplicates. QoS 2 adds protocol exchanges and state; choose it only when its extra guarantees justify the bandwidth and implementation cost. Production broker credentials, TLS, ACLs, retained-message policy and command expiry still need to be specified.
 
-```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
+## Risk engine math
+
+All tunable values live in `src/lib/config.ts`; the pure functions live in `src/lib/riskEngine.ts`.
+
+### Median and EMA
+
+For the configured 5-sample rolling buffer, sort a copy and select index `floor(n / 2)`. The implementation uses the current available samples during startup.
+
+```text
+Sₜ = αYₜ + (1 − α)Sₜ₋₁
+α = 0.3
+```
+
+The first EMA is initialized from the raw reading. The median rejects isolated spikes; the EMA then smooths the remaining variation.
+
+### Rate of rise
+
+```text
+rate = (medianₜ − medianₜ₋₁) / (elapsed_seconds / 60)
+```
+
+The current engine expresses level as percent, so the resulting unit is **percentage points per minute**. With no previous sample the rate is zero; a too-small time gap retains the previous valid rate.
+
+### Weather score and adaptive thresholds
+
+The current engine adds discrete points from 6-hour rain probability, 6-hour/24-hour volume, humidity and cloud-cover bands. A stale weather feed is excluded. It then selects one of four configured threshold sets:
+
+| Weather score | WATCH level | ALERT level | CRITICAL level | ALERT rate | CRITICAL rate |
+| ------------: | ----------: | ----------: | -------------: | ---------: | ------------: |
+|         `< 2` |         40% |         60% |            80% |   3.0%/min |      5.0%/min |
+|         `2–3` |         38% |         58% |            78% |   2.8%/min |      4.8%/min |
+|         `4–5` |         35% |         55% |            75% |   2.5%/min |      4.5%/min |
+|          `6+` |         30% |         50% |            70% |   2.0%/min |      4.0%/min |
+
+CRITICAL predicates are evaluated first. Level, rate and physical-float input can independently elevate the state. An unacknowledged ALERT escalates after 60 seconds of **simulated** time.
+
+## Proposed hardware BOM and reference pinout
+
+The capstone repository contains no verified wiring diagram. This is a **starting point for schematic review**, not an as-built BOM. GPIO assignments are examples and must be checked against the exact ESP32 dev board, sensor datasheet, power design and enclosure before wiring.
+
+| Item                                            |   Qty | Reference interface / notes                                                                              |
+| ----------------------------------------------- | ----: | -------------------------------------------------------------------------------------------------------- |
+| ESP32-WROOM-32 development board                |     2 | One sensor node and one actuator node; board revision affects pin availability                           |
+| JSN-SR04T **or** A02YYUW ultrasonic sensor      |     1 | Alternative sensors: JSN trigger/echo; A02YYUW UART. Do not share one pinout between them                |
+| RGB LED strip/module                            |     1 | Use suitable MOSFET drivers and external supply for a strip; do not power a high-current strip from GPIO |
+| 85dB active buzzer                              |     1 | Drive through a transistor/MOSFET matched to its current; add flyback protection if required by the load |
+| Physical float switch                           |     1 | Normally-open/closed contact to a pulled-up input; validate interrupt/debounce behavior                  |
+| Battery, regulator and ADC divider              | 1 set | Size for load and duty cycle; verify ADC attenuation, divider impedance and safe input range             |
+| Waterproof enclosure, cable glands and mounting | 1 set | Select to site ingress, corrosion and maintenance requirements                                           |
+
+### Example GPIO map (proposed only)
+
+| Node     | Signal                 | Example ESP32 GPIO | Interface notes                                                               |
+| -------- | ---------------------- | -----------------: | ----------------------------------------------------------------------------- |
+| Sensor   | JSN-SR04T TRIG         |                  5 | 3.3V output; confirm module trigger requirements                              |
+| Sensor   | JSN-SR04T ECHO         |                 18 | Many modules expose 5V echo; level shift/divide to a safe ESP32 input first   |
+| Sensor   | A02YYUW TX → ESP32 RX2 |                 16 | Alternative to JSN; UART wiring/baud/framing from the exact sensor datasheet  |
+| Sensor   | A02YYUW RX ← ESP32 TX2 |                 17 | Verify whether the selected A02YYUW variant uses/configures RX                |
+| Sensor   | Battery divider → ADC1 |                 34 | Input-only pin; scale battery voltage and check ADC range on the target board |
+| Actuator | RGB R / G / B PWM      |       25 / 26 / 27 | Use MOSFET drivers for strips and a shared ground with adequate supply        |
+| Actuator | Active buzzer driver   |                 32 | GPIO controls transistor/MOSFET gate/base, not the buzzer load directly       |
+| Actuator | Float switch interrupt |                 33 | Configure appropriate pull-up/down, debounce and safe local fail-state        |
+
+## Local development
+
+Requirements: Node.js 20+ and npm. Install and run:
+
+```bash
+npm install
 npm run dev
 ```
+
+Run the automated test suite and production build:
+
+```bash
+npm test
+npm run build
+```
+
+Vite prints the local URL in the terminal. The configured port is provided by the Lovable TanStack Vite preset and may differ by environment.
+
+## Test coverage
+
+The current suite has 16 cases: 10 deterministic risk-engine tests plus routing, landing scenario interaction, citizen portal/report-dialog and About-page interview-content checks. These tests do not validate physical sensor accuracy, RF coverage, electrical isolation or municipal response procedures; use hardware-in-the-loop and field testing for those.
+
+## Interview talking points
+
+- **Why dual boards?** Spatial separation, reduced electrical coupling and bounded fault domains; the cost is additional power, firmware and network complexity.
+- **Why median + EMA?** Median rejects impulse outliers; EMA provides constant-cost smoothing. Both add latency, which needs calibration against response requirements.
+- **What if MQTT is unavailable?** Reconnect and buffer bounded telemetry, expose stale/offline status with LWT, and use a local float-switch fallback. Define buffer overflow and stale command policy.
+- **Why Node-RED?** Visual, event-driven integration is easy to inspect and tune; production still requires versioned flows, tests, observability and rollback.
+- **What does weather fusion change?** It selects more conservative discrete thresholds before runoff reaches the drain, while stale forecast data is ignored.
+- **How is it validated?** Pure engine tests verify deterministic math; UI tests verify key flows. Hardware and field behavior remain outside the web test boundary.
+
+## Team credits
+
+Samsung Innovation Campus IoT Capstone · Team 10 · RNSIT, Bengaluru. Add individual member names and verified project links here when the team has approved the attribution.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

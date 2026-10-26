@@ -21,12 +21,33 @@ import {
 } from "@/lib/riskEngine";
 
 export type EventKind = RiskState | "ESCALATED";
-export interface LogEvent { simTime: number; wallTime: number; kind: EventKind }
-export interface EmailEntry { simTime: number; wallTime: number; subject: string; body: string }
+export interface LogEvent {
+  simTime: number;
+  wallTime: number;
+  kind: EventKind;
+}
+export interface EmailEntry {
+  simTime: number;
+  wallTime: number;
+  subject: string;
+  body: string;
+}
 export type LedColor = "green" | "yellow" | "red" | "off";
 
-const CALM_WEATHER: Weather = { rainProb6h: 20, rainVolume6h: 0.5, rainVolume24h: 2, humidity: 70, clouds: 50 };
-const STORM_WEATHER: Weather = { rainProb6h: 90, rainVolume6h: 12, rainVolume24h: 25, humidity: 92, clouds: 95 };
+const CALM_WEATHER: Weather = {
+  rainProb6h: 20,
+  rainVolume6h: 0.5,
+  rainVolume24h: 2,
+  humidity: 70,
+  clouds: 50,
+};
+const STORM_WEATHER: Weather = {
+  rainProb6h: 90,
+  rainVolume6h: 12,
+  rainVolume24h: 25,
+  humidity: 92,
+  clouds: 95,
+};
 
 const clamp = (v: number, lo = 0, hi = 100) => Math.min(hi, Math.max(lo, v));
 
@@ -47,7 +68,7 @@ interface SimState {
   memory: EngineMemory;
   output: EngineOutput | null;
   lastSampleSimTime: number | null;
-  history: { t: number; ema: number; raw: number }[];
+  history: { t: number; true: number; ema: number; raw: number }[];
   processedState: RiskState | null;
   escalationStartedAt: number | null;
   ackReceived: boolean;
@@ -59,7 +80,23 @@ interface SimState {
   tick: () => void;
   refreshWeather: () => void;
   acknowledge: () => void;
-  set: (p: Partial<Pick<SimState, "running" | "speed" | "netInflow" | "sensorOnline" | "actuatorOnline" | "outliersEnabled" | "stormOverride" | "forceWeatherStale" | "showFloatSwitch" | "trueLevel">>) => void;
+  set: (
+    p: Partial<
+      Pick<
+        SimState,
+        | "running"
+        | "speed"
+        | "netInflow"
+        | "sensorOnline"
+        | "actuatorOnline"
+        | "outliersEnabled"
+        | "stormOverride"
+        | "forceWeatherStale"
+        | "showFloatSwitch"
+        | "trueLevel"
+      >
+    >,
+  ) => void;
   reset: () => void;
 }
 
@@ -80,7 +117,7 @@ const initial = () => ({
   memory: initialMemory(),
   output: null as EngineOutput | null,
   lastSampleSimTime: null as number | null,
-  history: [] as { t: number; ema: number; raw: number }[],
+  history: [] as { t: number; true: number; ema: number; raw: number }[],
   processedState: null as RiskState | null,
   escalationStartedAt: null as number | null,
   ackReceived: false,
@@ -104,7 +141,10 @@ export const useSimulation = create<SimState>((set, get) => ({
   ...initial(),
 
   refreshWeather: () =>
-    set((s) => ({ weather: s.stormOverride ? STORM_WEATHER : CALM_WEATHER, weatherLastFetchedMs: Date.now() })),
+    set((s) => ({
+      weather: s.stormOverride ? STORM_WEATHER : CALM_WEATHER,
+      weatherLastFetchedMs: Date.now(),
+    })),
 
   acknowledge: () => set({ ackReceived: true }),
 
@@ -124,7 +164,15 @@ export const useSimulation = create<SimState>((set, get) => ({
     const trueLevel = clamp(s.trueLevel + s.netInflow * (SAMPLE_INTERVAL_SIM_SECONDS / 60));
     const patch: Partial<SimState> = { simTime, trueLevel };
 
-    let { events, outbox, lastEmailedState, escalationStartedAt, ackReceived, escalated, processedState } = s;
+    let {
+      events,
+      outbox,
+      lastEmailedState,
+      escalationStartedAt,
+      ackReceived,
+      escalated,
+      processedState,
+    } = s;
     const pushEvent = (kind: EventKind) => {
       events = [{ simTime, wallTime: Date.now(), kind }, ...events].slice(0, EVENT_LOG_MAX);
     };
@@ -136,7 +184,8 @@ export const useSimulation = create<SimState>((set, get) => ({
 
     if (s.sensorOnline) {
       let reading = clamp(trueLevel + (Math.random() * 2 - 1) * SENSOR_NOISE);
-      if (s.outliersEnabled && Math.random() < OUTLIER_CHANCE) reading = clamp(reading + (Math.random() < 0.5 ? -1 : 1) * (25 + Math.random() * 20));
+      if (s.outliersEnabled && Math.random() < OUTLIER_CHANCE)
+        reading = clamp(reading + (Math.random() < 0.5 ? -1 : 1) * (25 + Math.random() * 20));
       const forceStale = s.forceWeatherStale;
       const { memory, output } = processSample(s.memory, {
         reading,
@@ -149,7 +198,15 @@ export const useSimulation = create<SimState>((set, get) => ({
       patch.memory = memory;
       patch.output = output;
       patch.lastSampleSimTime = simTime;
-      patch.history = [...s.history, { t: simTime, ema: +output.levelEma.toFixed(2), raw: +reading.toFixed(2) }].slice(-HISTORY_MAX);
+      patch.history = [
+        ...s.history,
+        {
+          t: simTime,
+          true: +trueLevel.toFixed(2),
+          ema: +output.levelEma.toFixed(2),
+          raw: +reading.toFixed(2),
+        },
+      ].slice(-HISTORY_MAX);
 
       // Change filter: only act when state actually changes.
       if (output.state !== processedState) {
@@ -168,22 +225,40 @@ export const useSimulation = create<SimState>((set, get) => ({
     }
 
     // Escalation timer runs on simulated time.
-    if (escalationStartedAt !== null && !escalated && !ackReceived && simTime - escalationStartedAt >= ESCALATION_SECONDS) {
+    if (
+      escalationStartedAt !== null &&
+      !escalated &&
+      !ackReceived &&
+      simTime - escalationStartedAt >= ESCALATION_SECONDS
+    ) {
       escalated = true;
       pushEvent("ESCALATED");
       sendEmail("ESCALATED");
     }
 
-    set({ ...patch, events, outbox, lastEmailedState, escalationStartedAt, ackReceived, escalated, processedState });
+    set({
+      ...patch,
+      events,
+      outbox,
+      lastEmailedState,
+      escalationStartedAt,
+      ackReceived,
+      escalated,
+      processedState,
+    });
   },
 }));
 
 // ---- Derived selectors ----
-export type SensorStatus = "ONLINE • DATA FRESH" | "ONLINE • DATA STALE" | "OFFLINE • DATA UNAVAILABLE";
+export type SensorStatus =
+  "ONLINE • DATA FRESH" | "ONLINE • DATA STALE" | "OFFLINE • DATA UNAVAILABLE";
 
-export function sensorStatus(s: Pick<SimState, "sensorOnline" | "simTime" | "lastSampleSimTime">): SensorStatus {
+export function sensorStatus(
+  s: Pick<SimState, "sensorOnline" | "simTime" | "lastSampleSimTime">,
+): SensorStatus {
   if (!s.sensorOnline) return "OFFLINE • DATA UNAVAILABLE";
-  if (s.lastSampleSimTime === null || s.simTime - s.lastSampleSimTime >= SENSOR_STALE_AFTER_SECONDS) return "ONLINE • DATA STALE";
+  if (s.lastSampleSimTime === null || s.simTime - s.lastSampleSimTime >= SENSOR_STALE_AFTER_SECONDS)
+    return "ONLINE • DATA STALE";
   return "ONLINE • DATA FRESH";
 }
 
